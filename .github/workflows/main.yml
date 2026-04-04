@@ -1,7 +1,9 @@
 name: Deploy to GitHub Pages
+
 on:
   push:
     branches: [ main ]
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -9,18 +11,30 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Install dependencies
         run: npm install
+
       - name: Build
         run: npm run build
         env:
           NODE_OPTIONS: --max_old_space_size=4096
-      - name: Inject Kakao script into dist
+
+      - name: Inject Kakao script
         run: |
-          sed -i 's|</head>|<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=8d3328b4142c5552c1daa5eec04243f9\&libraries=services"></script></head>|' dist/index.html
+          KAKAO_SCRIPT='<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=8d3328b4142c5552c1daa5eec04243f9&libraries=services"></script>'
+          python3 -c "
+          with open('dist/index.html', 'r') as f:
+              content = f.read()
+          content = content.replace('</head>', '${KAKAO_SCRIPT}</head>')
+          with open('dist/index.html', 'w') as f:
+              f.write(content)
+          "
+
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
