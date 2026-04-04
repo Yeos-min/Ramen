@@ -26,13 +26,13 @@ jobs:
 
       - name: Inject Kakao script
         run: |
-          KAKAO_SCRIPT='<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=8d3328b4142c5552c1daa5eec04243f9&libraries=services"></script>'
-          python3 -c "
-          with open('dist/index.html', 'r') as f:
-              content = f.read()
-          content = content.replace('</head>', '${KAKAO_SCRIPT}</head>')
-          with open('dist/index.html', 'w') as f:
-              f.write(content)
+          node -e "
+          const fs = require('fs');
+          let html = fs.readFileSync('dist/index.html', 'utf8');
+          const kakao = '<script type=\"text/javascript\" src=\"https://dapi.kakao.com/v2/maps/sdk.js?appkey=8d3328b4142c5552c1daa5eec04243f9&libraries=services\"><\/script>';
+          html = html.replace('</head>', kakao + '</head>');
+          fs.writeFileSync('dist/index.html', html);
+          console.log('Kakao script injected!');
           "
 
       - name: Deploy
