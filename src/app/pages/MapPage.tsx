@@ -3,7 +3,7 @@
  * 카카오 JavaScript 키: 8d3328b4142c5552c1daa5eec04243f9
  *
  * 로딩 전략:
- * - autoload=false 스크립트 주입 후 수동 초기화
+ * - index.html 스크립트 로드 완료를 폴링으로 감지 후 초기화
  * - 검색 결과 sessionStorage 캐싱 → 재방문 시 즉시 표시
  */
 
@@ -12,8 +12,7 @@ import { useNavigate } from 'react-router';
 import { useApp } from '../AppContext';
 import { UdonComingSoon } from '../components/UdonComingSoon';
 
-const KAKAO_APP_KEY = '8d3328b4142c5552c1daa5eec04243f9';
-const CACHE_PREFIX  = 'ramen-map-v1-';
+const CACHE_PREFIX = 'ramen-map-v1-';
 
 declare global {
   interface Window { kakao: any; }
@@ -46,7 +45,6 @@ interface KakaoPlace {
   place_url: string;
 }
 
-// ── sessionStorage 캐시 헬퍼 ──────────────────────────────────────────────
 function readCache(filterId: FilterId): KakaoPlace[] | null {
   try {
     const raw = sessionStorage.getItem(CACHE_PREFIX + filterId);
@@ -57,7 +55,6 @@ function writeCache(filterId: FilterId, data: KakaoPlace[]) {
   try { sessionStorage.setItem(CACHE_PREFIX + filterId, JSON.stringify(data)); } catch {}
 }
 
-// ── 메인 컴포넌트 ─────────────────────────────────────────────────────────
 export default function MapPage() {
   const navigate = useNavigate();
   const { theme, mode } = useApp();
@@ -89,7 +86,7 @@ export default function MapPage() {
     }
   }, []);
 
-  // ── ① 카카오 SDK 주입 및 수동 초기화 ─────────────
+  // ── ① 카카오 SDK 로드 감지 (폴링) + 지도 초기화 ──────────────────────
   useEffect(() => {
     const initMap = () => {
       const container = document.getElementById('kakao-map');
@@ -108,20 +105,22 @@ export default function MapPage() {
       setMapReady(true);
     };
 
+    // 이미 로드된 경우 바로 초기화
     if (window.kakao?.maps) {
-  initMap();
-  return;
-}
+      initMap();
+      return;
+    }
 
-const poll = setInterval(() => {
-  if (window.kakao?.maps) {
-    clearInterval(poll);
-    initMap();
-  }
-}, 100);
-return () => clearInterval(poll);
+    // 아직 로드 안 된 경우 100ms 간격으로 폴링
+    const poll = setInterval(() => {
+      if (window.kakao?.maps) {
+        clearInterval(poll);
+        initMap();
+      }
+    }, 100);
 
     return () => {
+      clearInterval(poll);
       markersRef.current.forEach(m => m.setMap(null));
       markersRef.current = [];
       closeOverlay();
@@ -423,8 +422,6 @@ return () => clearInterval(poll);
     </div>
   );
 }
-
-// ── 컴포넌트 ─────────────────────────────────────────────────────────
 
 function SearchingSkeletonCard({ accent, subColor, mutedColor, chipBg }: any) {
   const shimmer = `${accent}18`;
