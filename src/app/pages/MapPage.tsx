@@ -1,352 +1,631 @@
-import { useState, useMemo } from 'react';
+/**
+ * MapPage — 카카오 지도 + 장소 검색 API
+ * 카카오 JavaScript 키: 8d3328b4142c5552c1daa5eec04243f9
+ *
+ * 로딩 전략:
+ *  - autoload=true 스크립트 주입 → 100ms 폴링으로 window.kakao.maps 감지 → 즉시 초기화
+ *  - 검색 결과 sessionStorage 캐싱 → 재방문 시 즉시 표시
+ */
+
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { mockShops, BrothType, Shop, MenuItem } from '../types';
 import { useApp } from '../AppContext';
-import { UlsanMapSvg } from '../components/UlsanMapSvg';
 import { UdonComingSoon } from '../components/UdonComingSoon';
 
-type FilterId = '전체' | BrothType | '진함' | '맑음' | '매운맛' | '웨이팅';
+const KAKAO_APP_KEY = '8d3328b4142c5552c1daa5eec04243f9';
+const CACHE_PREFIX  = 'ramen-map-v1-';
+const POLL_MS       = 100;
 
-const RAMEN_FILTERS: { id: FilterId; label: string }[] = [
-  { id: '전체', label: '전체' },
-  { id: '돼지', label: '🐷 돼지' },
-  { id: '닭', label: '🐓 닭' },
-  { id: '해물', label: '🦐 해물' },
-  { id: '쇼유', label: '🫙 쇼유' },
-  { id: '시오', label: '🧂 시오' },
-  { id: '미소', label: '🫘 미소' },
-  { id: '진함', label: '진한 국물' },
-  { id: '맑음', label: '맑은 국물' },
-  { id: '매운맛', label: '🌶 매운맛' },
-  { id: '웨이팅', label: '⏳ 웨이팅' },
-];
-
-const BROTH_COLORS: Record<string, { from: string; to: string; emoji: string }> = {
-  돼지: { from: '#3d1a08', to: '#6b3015', emoji: '🐷' },
-  닭:   { from: '#2d2a08', to: '#5a5018', emoji: '🐓' },
-  해물: { from: '#081a2d', to: '#0e3050', emoji: '🦐' },
-  쇼유: { from: '#2d0808', to: '#5a1010', emoji: '🫙' },
-  시오: { from: '#08182d', to: '#153050', emoji: '🧂' },
-  미소: { from: '#2a1a08', to: '#503018', emoji: '🫘' },
-};
-
-function MapMenuCard({ menu, theme, isRamen }: { menu: MenuItem; theme: any; isRamen: boolean }) {
-  const colors = BROTH_COLORS[menu.broth] ?? { from: '#2a1408', to: '#4a2a18', emoji: '🍜' };
-  return (
-    <div
-      className="shrink-0 rounded-[12px] overflow-hidden"
-      style={{
-        width: '120px',
-        background: `linear-gradient(145deg, ${colors.from}, ${colors.to})`,
-        border: `1px solid ${theme.accent}44`,
-      }}
-    >
-      {/* 상단 이모지 영역 */}
-      <div
-        className="flex items-center justify-center"
-        style={{ height: '52px', background: `linear-gradient(135deg, ${colors.from}, ${colors.to})` }}
-      >
-        <span className="text-[28px]">{colors.emoji}</span>
-      </div>
-      {/* 정보 */}
-      <div className="px-[8px] py-[8px] flex flex-col gap-[3px]">
-        <div
-          className="text-[11px] line-clamp-2 leading-tight"
-          style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", fontWeight: 600, color: isRamen ? '#ffdbce' : theme.titleColor }}
-        >
-          {menu.name}
-        </div>
-        <div className="flex gap-[3px] flex-wrap">
-          <span
-            className="text-[9px] px-[4px] py-[1px] rounded-[3px]"
-            style={{ backgroundColor: theme.accent + '30', color: theme.accentSoft }}
-          >
-            {menu.broth}
-          </span>
-          <span
-            className="text-[9px] px-[4px] py-[1px] rounded-[3px]"
-            style={{ backgroundColor: theme.chipBg, color: theme.mutedColor }}
-          >
-            {menu.texture}면
-          </span>
-        </div>
-        <div
-          className="text-[10px] mt-[1px]"
-          style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, color: theme.accentSoft }}
-        >
-          {menu.price.toLocaleString()}원
-        </div>
-      </div>
-    </div>
-  );
+declare global {
+  interface Window { kakao: any; }
 }
 
+const CHAIN_BLACKLIST = ['이치란', '잇푸도', '키스케'];
+
+type FilterId = '전체' | '돼지뼈' | '닭육수' | '해물' | '쇼유' | '시오' | '미소' | '진한국물' | '매운맛';
+
+const FILTERS: { id: FilterId; label: string; keyword: string }[] = [
+  { id: '전체',     label: '전체',       keyword: '울산 라멘' },
+  { id: '돼지뼈',   label: '🐷 돼지뼈', keyword: '울산 돼지뼈 라멘' },
+  { id: '닭육수',   label: '🐓 닭육수', keyword: '울산 닭 라멘' },
+  { id: '해물',     label: '🦐 해물',   keyword: '울산 해물 라멘' },
+  { id: '쇼유',     label: '🫙 쇼유',   keyword: '울산 쇼유 라멘' },
+  { id: '시오',     label: '🧂 시오',   keyword: '울산 시오 라멘' },
+  { id: '미소',     label: '🫘 미소',   keyword: '울산 미소 라멘' },
+  { id: '진한국물', label: '진한 국물', keyword: '울산 진한 국물 라멘' },
+  { id: '매운맛',   label: '🌶 매운맛', keyword: '울산 매운 라멘' },
+];
+
+interface KakaoPlace {
+  id: string;
+  place_name: string;
+  road_address_name: string;
+  address_name: string;
+  phone: string;
+  x: string;
+  y: string;
+  place_url: string;
+}
+
+// ── sessionStorage 캐시 헬퍼 ──────────────────────────────────────────────
+function readCache(filterId: FilterId): KakaoPlace[] | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_PREFIX + filterId);
+    return raw ? (JSON.parse(raw) as KakaoPlace[]) : null;
+  } catch { return null; }
+}
+function writeCache(filterId: FilterId, data: KakaoPlace[]) {
+  try { sessionStorage.setItem(CACHE_PREFIX + filterId, JSON.stringify(data)); } catch {}
+}
+
+// ── 메인 컴포넌트 ─────────────────────────────────────────────────────────
 export default function MapPage() {
   const navigate = useNavigate();
   const { theme, mode } = useApp();
   const isRamen = mode === 'ramen';
+  const {
+    pageBg, chipBg, accent, accentSoft, accentGlow, accentGlowStrong,
+    subColor, mutedColor, labelColor, border,
+  } = theme;
 
-  const modeShops = useMemo(() => mockShops.filter((s) => s.type === mode), [mode]);
+  // kakao 이벤트 콜백(비동기 클로저) 안에서 최신값을 읽기 위한 ref
+  const isRamenRef = useRef(isRamen);
+  const accentRef  = useRef(accent);
+  useEffect(() => { isRamenRef.current = isRamen; }, [isRamen]);
+  useEffect(() => { accentRef.current  = accent;  }, [accent]);
 
-  const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<FilterId>('전체');
+  const mapRef     = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const overlayRef = useRef<any>(null);
 
-  const { pageBg, cardBg, chipBg, accent, accentSoft, accentGlow, subColor, mutedColor, labelColor, border, shadow } = theme;
+  const [mapReady,      setMapReady]      = useState(false);
+  const [searching,     setSearching]     = useState(false);
+  const [places,        setPlaces]        = useState<KakaoPlace[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<KakaoPlace | null>(null);
+  const [activeFilter,  setActiveFilter]  = useState<FilterId>('전체');
 
-  const filteredShops = useMemo(() => modeShops.filter((shop) => {
-    const matchesSearch =
-      !searchQuery ||
-      shop.name.includes(searchQuery) ||
-      shop.tags.some((t) => t.includes(searchQuery));
-    if (!matchesSearch) return false;
-    if (activeFilter === '전체') return true;
-    if (['돼지', '닭', '해물', '쇼유', '시오', '미소'].includes(activeFilter)) return shop.broth === activeFilter;
-    if (activeFilter === '진함') return shop.richness === '진함';
-    if (activeFilter === '맑음') return shop.richness === '맑음';
-    if (activeFilter === '매운맛') return shop.spiceLevel !== '없음';
-    if (activeFilter === '웨이팅') return shop.waiting;
-    return true;
-  }), [modeShops, searchQuery, activeFilter]);
+  // ── 말풍선 닫기 ──────────────────────────────────────────────────────────
+  const closeOverlay = useCallback(() => {
+    if (overlayRef.current) {
+      overlayRef.current.setMap(null);
+      overlayRef.current = null;
+    }
+  }, []);
 
-  const filteredIds = useMemo(() => new Set(filteredShops.map((s) => s.id)), [filteredShops]);
+  // ── ① 카카오 SDK 주입 + 100ms 폴링으로 감지 → 지도 초기화 ─────────────
+  useEffect(() => {
+    // 지도 초기화 (window.kakao.maps 준비 완료 후 호출)
+    const initMap = () => {
+      const container = document.getElementById('kakao-map');
+      if (!container || mapRef.current) return;
 
-  const handleSelect = (shop: Shop) => {
-    setSelectedShop((prev) => (prev?.id === shop.id ? null : shop));
+      mapRef.current = new window.kakao.maps.Map(container, {
+        center: new window.kakao.maps.LatLng(35.5384, 129.3114),
+        level: 5,
+      });
+
+      // 지도 빈 영역 클릭 → 말풍선 + 하단 카드 닫기
+      window.kakao.maps.event.addListener(mapRef.current, 'click', () => {
+        closeOverlay();
+        setSelectedPlace(null);
+      });
+
+      setMapReady(true);
+    };
+
+    // 이미 로드된 경우 즉시 초기화
+    if (window.kakao?.maps) {
+      initMap();
+      return;
+    }
+
+    // 스크립트 태그 주입 (autoload=true → 스크립트 로드 완료 시 자동 초기화)
+    if (!document.querySelector('script[src*="dapi.kakao.com"]')) {
+      const script = document.createElement('script');
+      script.type  = 'text/javascript';
+      // autoload=true (기본값): 스크립트 로드되면 window.kakao.maps 자동으로 준비됨
+      script.src   = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&libraries=services`;
+      document.head.appendChild(script);
+    }
+
+    // 100ms 간격으로 window.kakao.maps 준비 여부 체크
+    const poll = setInterval(() => {
+      if (window.kakao?.maps) {
+        clearInterval(poll);
+        initMap();
+      }
+    }, POLL_MS);
+
+    return () => {
+      clearInterval(poll);
+      markersRef.current.forEach(m => m.setMap(null));
+      markersRef.current = [];
+      closeOverlay();
+    };
+  }, [closeOverlay]);
+
+  // ── ② 장소 검색 ─────────────────────────────────────────────────────────
+  const doSearch = useCallback((filterId: FilterId) => {
+    if (!mapRef.current || !window.kakao?.maps?.services) return;
+    const filter = FILTERS.find(f => f.id === filterId);
+    if (!filter) return;
+
+    // 캐시 히트 → 즉시 마커 렌더
+    const cached = readCache(filterId);
+    if (cached) {
+      renderMarkers(cached);
+      setPlaces(cached);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    setSelectedPlace(null);
+    closeOverlay();
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = [];
+
+    const ps = new window.kakao.maps.services.Places();
+    ps.keywordSearch(
+      filter.keyword,
+      (data: KakaoPlace[], status: string) => {
+        setSearching(false);
+        if (status !== window.kakao.maps.services.Status.OK) {
+          setPlaces([]);
+          return;
+        }
+        const result = data.filter(p => !CHAIN_BLACKLIST.some(c => p.place_name.includes(c)));
+        writeCache(filterId, result);
+        setPlaces(result);
+        renderMarkers(result);
+      },
+      {
+        location: new window.kakao.maps.LatLng(35.5384, 129.3114),
+        radius: 15000,
+        sort: window.kakao.maps.services.SortBy.ACCURACY,
+        size: 15,
+      }
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closeOverlay]);
+
+  // 마커 일괄 생성 (doSearch에서 캐시/신규 공통 사용)
+  const renderMarkers = useCallback((result: KakaoPlace[]) => {
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = [];
+
+    const ac = accentRef.current;
+    const pinSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 30 42">
+      <path d="M15 0C6.7 0 0 6.7 0 15c0 10 15 27 15 27S30 25 30 15C30 6.7 23.3 0 15 0z" fill="${ac}"/>
+      <circle cx="15" cy="15" r="6.5" fill="rgba(255,255,255,0.92)"/>
+      <circle cx="15" cy="15" r="3.2" fill="${ac}"/>
+    </svg>`;
+    const pinUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(pinSvg)));
+    const markerImage = new window.kakao.maps.MarkerImage(
+      pinUrl,
+      new window.kakao.maps.Size(30, 42),
+      { offset: new window.kakao.maps.Point(15, 42) }
+    );
+
+    const bounds = new window.kakao.maps.LatLngBounds();
+    const newMarkers: any[] = [];
+
+    result.forEach(place => {
+      const pos = new window.kakao.maps.LatLng(Number(place.y), Number(place.x));
+      bounds.extend(pos);
+
+      const marker = new window.kakao.maps.Marker({
+        map: mapRef.current,
+        position: pos,
+        image: markerImage,
+        title: place.place_name,
+      });
+
+      window.kakao.maps.event.addListener(marker, 'click', () => {
+        closeOverlay();
+
+        const ramen  = isRamenRef.current;
+        const col    = accentRef.current;
+        const bgCol  = '#FFFBF5';
+        const namCol = '#2C1A0E';
+        const subCol = '#7A4F30';
+        const addr   = place.road_address_name || place.address_name;
+
+        const el = document.createElement('div');
+        el.style.cssText = 'position:relative;pointer-events:none;filter:drop-shadow(0 4px 14px rgba(0,0,0,0.5));';
+        el.innerHTML = `
+          <div style="background:${bgCol};border:2px solid ${col};border-radius:10px;
+                      padding:9px 14px;min-width:160px;max-width:220px;box-sizing:border-box;">
+            <div style="color:${namCol};font-size:12px;font-weight:700;font-family:sans-serif;
+                        margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              ${place.place_name}
+            </div>
+            <div style="color:${subCol};font-size:10px;font-family:sans-serif;line-height:1.5;word-break:keep-all;">
+              ${addr}
+            </div>
+          </div>
+          <div style="position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);width:0;height:0;
+                      border-left:8px solid transparent;border-right:8px solid transparent;border-top:10px solid ${col};"></div>
+          <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;
+                      border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid ${bgCol};"></div>
+        `;
+
+        const overlay = new window.kakao.maps.CustomOverlay({
+          content: el, position: pos, yAnchor: 1.18, zIndex: 15,
+        });
+        overlay.setMap(mapRef.current);
+        overlayRef.current = overlay;
+
+        setSelectedPlace(place);
+        mapRef.current.panTo(pos);
+      });
+
+      newMarkers.push(marker);
+    });
+
+    markersRef.current = newMarkers;
+    if (result.length > 0) mapRef.current.setBounds(bounds);
+  }, [closeOverlay]);
+
+  // ── ③ mapReady / activeFilter 변경 시 검색 트리거 ─────────────────────
+  useEffect(() => {
+    if (!mapReady) return;
+    doSearch(activeFilter);
+  }, [mapReady, activeFilter, doSearch]);
+
+  // 길찾기
+  const handleDirections = (place: KakaoPlace) => {
+    window.open(
+      `https://map.kakao.com/link/to/${encodeURIComponent(place.place_name)},${place.y},${place.x}`,
+      '_blank', 'noopener,noreferrer'
+    );
   };
 
-  const handleDismiss = () => setSelectedShop(null);
-
+  // ── 우동 모드 ────────────────────────────────────────────────────────────
   if (!isRamen) {
     return (
       <div className="h-full flex flex-col overflow-hidden" style={{ backgroundColor: pageBg }}>
-        <div className="shrink-0 px-[18px] py-[12px] flex items-center gap-[12px]" style={{ backgroundColor: pageBg }}>
-          <button onClick={() => navigate(-1)} className="size-[36px] flex items-center justify-center rounded-full shrink-0" style={{ backgroundColor: chipBg }}>
-            <svg className="size-[16px]" fill="none" viewBox="0 0 20 20">
-              <path d="M13 4l-6 6 6 6" stroke={accentSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+        <div className="shrink-0 flex items-center gap-[12px] px-[18px] py-[12px]">
+          <button onClick={() => navigate(-1)}
+            className="size-[36px] flex items-center justify-center rounded-full"
+            style={{ backgroundColor: chipBg }}>
+            <ChevronLeft stroke={accentSoft} />
           </button>
-          <span className="text-[20px] tracking-[-1px]" style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: accent }}>면탐정</span>
+          <span style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: accent }}>면탐정</span>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          <UdonComingSoon />
-        </div>
+        <div className="flex-1 overflow-y-auto"><UdonComingSoon /></div>
       </div>
     );
   }
 
+  // ── 메인 렌더 ────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col overflow-hidden transition-colors duration-500" style={{ backgroundColor: pageBg }}>
-      {/* Header */}
-      <div className="shrink-0 px-[18px] py-[12px] flex items-center gap-[12px]" style={{ backgroundColor: pageBg }}>
-        <button
-          onClick={() => navigate(-1)}
-          className="size-[36px] flex items-center justify-center rounded-full shrink-0"
-          style={{ backgroundColor: chipBg }}
-        >
-          <svg className="size-[16px]" fill="none" viewBox="0 0 20 20">
-            <path d="M13 4l-6 6 6 6" stroke={accentSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+    <div className="h-full flex flex-col overflow-hidden" style={{ backgroundColor: pageBg }}>
+
+      {/* 헤더 */}
+      <div className="shrink-0 flex items-center gap-[12px] px-[18px] pt-[14px] pb-[10px]">
+        <button onClick={() => navigate(-1)}
+          className="size-[36px] flex items-center justify-center rounded-full shrink-0 active:scale-[0.92] transition-transform"
+          style={{ backgroundColor: chipBg }}>
+          <ChevronLeft stroke={accentSoft} />
         </button>
-        <span className="text-[20px] tracking-[-1px]" style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: accent }}>
-          면탐정
-        </span>
-        <span className="text-[13px] opacity-60" style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: subColor }}>
-          라멘 지도
-        </span>
-        <div className="ml-auto flex items-center gap-[4px] px-[8px] py-[3px] rounded-full" style={{ backgroundColor: chipBg, border: `1px solid ${accent}` }}>
-          <svg className="size-[8px]" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill={accent} /></svg>
-          <span className="text-[10px]" style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: accent }}>
-            울산 중구
+        <div className="flex items-center gap-[8px]">
+          <span className="text-[20px] tracking-[-0.5px]"
+            style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: accent }}>
+            면탐정
+          </span>
+          <span className="text-[13px]"
+            style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: subColor }}>
+            라멘 지도
+          </span>
+        </div>
+        <div className="ml-auto flex items-center gap-[4px] px-[8px] py-[3px] rounded-full"
+          style={{ backgroundColor: `${accent}22`, border: `1px solid ${accent}55` }}>
+          <svg className="size-[6px]" viewBox="0 0 6 6">
+            <circle cx="3" cy="3" r="3" fill={accent} />
+          </svg>
+          <span className="text-[10px]"
+            style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 600, color: accent }}>
+            울산
           </span>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="shrink-0 px-[18px] pb-[8px]">
-        <div className="rounded-[10px] flex items-center gap-[10px] px-[14px] py-[10px]" style={{ backgroundColor: chipBg }}>
-          <svg className="size-[15px] shrink-0" fill="none" viewBox="0 0 20 20">
-            <circle cx="9" cy="9" r="6" stroke={mutedColor} strokeWidth="2" />
-            <path d="M14 14l4 4" stroke={mutedColor} strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="가게명, 육수 종류 검색..."
-            className="flex-1 bg-transparent text-[13px] outline-none"
-            style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: isRamen ? '#fff' : theme.titleColor }}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="text-[13px]" style={{ color: mutedColor }}>✕</button>
-          )}
-        </div>
-      </div>
-
-      {/* Filter Chips */}
-      <div className="shrink-0 px-[18px] pb-[8px] flex gap-[6px] overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        {RAMEN_FILTERS.map((filter) => {
-          const isActive = activeFilter === filter.id;
+      {/* 필터 칩 */}
+      <div className="shrink-0 flex gap-[6px] px-[16px] pb-[10px] overflow-x-auto"
+        style={{ scrollbarWidth: 'none' }}>
+        {FILTERS.map(f => {
+          const active = activeFilter === f.id;
           return (
-            <button
-              key={filter.id}
-              onClick={() => setActiveFilter(filter.id)}
-              className="px-[11px] py-[6px] rounded-[14px] whitespace-nowrap transition-all duration-200"
+            <button key={f.id}
+              onClick={() => { setActiveFilter(f.id); setSelectedPlace(null); closeOverlay(); }}
+              className="px-[12px] py-[6px] rounded-[16px] whitespace-nowrap shrink-0 transition-all duration-200 active:scale-[0.96]"
               style={{
-                backgroundColor: isActive ? accent : chipBg,
-                boxShadow: isActive ? `0px 0px 8px 0px ${accentGlow}` : 'none',
-              }}
-            >
-              <span
-                className="text-[11px]"
-                style={{
-                  fontFamily: "'WenQuanYi Zen Hei', sans-serif",
-                  fontWeight: isActive ? 700 : 400,
-                  color: isActive ? labelColor : subColor,
-                }}
-              >
-                {filter.label}
+                backgroundColor: active ? accent : chipBg,
+                border: `1px solid ${active ? accent : border}`,
+                boxShadow: active ? `0 0 10px ${accentGlow}` : 'none',
+              }}>
+              <span className="text-[11px]" style={{
+                fontFamily: "'WenQuanYi Zen Hei',sans-serif",
+                fontWeight: active ? 700 : 400,
+                color: active ? labelColor : subColor,
+              }}>
+                {f.label}
               </span>
             </button>
           );
         })}
       </div>
 
-      {/* Map Area */}
-      <div className="flex-1 min-h-0 relative overflow-hidden">
-        {/* SVG Map */}
-        <div className="absolute inset-0">
-          <UlsanMapSvg
-            shops={modeShops}
-            filteredIds={filteredIds}
-            selectedId={selectedShop?.id ?? null}
-            onSelect={handleSelect}
-            onDismiss={handleDismiss}
-            theme={theme}
-            isRamen={isRamen}
-          />
-        </div>
+      {/* 지도 영역 */}
+      <div className="flex-1 relative min-h-0">
 
-        {/* 필터 결과 없을 때 */}
-        {filteredShops.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div
-              className="px-[18px] py-[12px] rounded-[12px] flex flex-col items-center gap-[6px]"
-              style={{ backgroundColor: isRamen ? 'rgba(33,15,7,0.92)' : 'rgba(243,237,226,0.92)', backdropFilter: 'blur(8px)' }}
-            >
-              <span className="text-[22px]">🔍</span>
-              <span className="text-[13px]" style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: subColor }}>
+        {/* 카카오 지도 컨테이너 */}
+        <div id="kakao-map" style={{ width: '100%', height: '100%' }} />
+
+        {/* ── 지도 로딩 중 오버레이 ── */}
+        {!mapReady && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[20px]"
+            style={{ backgroundColor: pageBg }}>
+            {/* 라멘 아이콘 애니메이션 */}
+            <div className="relative flex items-center justify-center">
+              {/* 외부 회전 링 */}
+              <svg className="animate-spin absolute" width="72" height="72" viewBox="0 0 72 72" fill="none">
+                <circle cx="36" cy="36" r="32" stroke={accent + '25'} strokeWidth="3" />
+                <path d="M36 4a32 32 0 0132 32" stroke={accent} strokeWidth="3" strokeLinecap="round" />
+              </svg>
+              {/* 내부 아이콘 */}
+              <div className="size-[48px] rounded-full flex items-center justify-center"
+                style={{ backgroundColor: `${accent}18` }}>
+                <span style={{ fontSize: '24px', lineHeight: 1 }}>🍜</span>
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-[6px]">
+              <span className="text-[16px] tracking-[-0.3px]"
+                style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: accent, fontWeight: 700 }}>
+                지도 불러오는 중
+              </span>
+              <PulsingDots accent={accent} />
+            </div>
+          </div>
+        )}
+
+        {/* 검색 중 상단 토스트 */}
+        {mapReady && searching && (
+          <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-20 flex items-center gap-[8px] px-[14px] py-[8px] rounded-full"
+            style={{
+              backgroundColor: 'rgba(42,20,8,0.95)',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+            }}>
+            <Spinner accent={accent} size={14} />
+            <span className="text-[12px]"
+              style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: subColor }}>
+              라멘집 탐색 중...
+            </span>
+          </div>
+        )}
+
+        {/* 결과 수 뱃지 */}
+        {mapReady && !searching && places.length > 0 && (
+          <div className="absolute left-[12px] top-[12px] z-10 px-[10px] py-[5px] rounded-[8px]"
+            style={{
+              backgroundColor: 'rgba(42,20,8,0.88)',
+              backdropFilter: 'blur(6px)',
+              border: `1px solid ${border}`,
+            }}>
+            <span className="text-[11px]"
+              style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: subColor }}>
+              {places.length}개 가게
+            </span>
+          </div>
+        )}
+
+        {/* 결과 없음 */}
+        {mapReady && !searching && places.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+            <div className="px-[20px] py-[14px] rounded-[14px] flex flex-col items-center gap-[8px]"
+              style={{ backgroundColor: 'rgba(42,20,8,0.92)', backdropFilter: 'blur(8px)' }}>
+              <span className="text-[28px]">🔍</span>
+              <span className="text-[13px]"
+                style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: subColor }}>
                 해당 조건의 가게가 없습니다
               </span>
             </div>
           </div>
         )}
 
-        {/* 지도 컨트롤 */}
-        <div className="absolute right-[12px] top-[12px] flex flex-col gap-[6px]">
-          {[
-            <path key="loc" d="M10 2a6 6 0 014.9 9.4L20 16.8l-1.4 1.4-5.2-5.1A6 6 0 1110 2zm0 2a4 4 0 100 8 4 4 0 000-8z" fill={accentSoft} />,
-            <path key="plus" d="M10 5v10M5 10h10" stroke={accentSoft} strokeWidth="2" strokeLinecap="round" />,
-            <path key="minus" d="M5 10h10" stroke={accentSoft} strokeWidth="2" strokeLinecap="round" />,
-          ].map((icon, i) => (
-            <button
-              key={i}
-              className="rounded-[8px] p-[8px] shadow-lg"
-              style={{ backgroundColor: isRamen ? 'rgba(42,23,15,0.92)' : 'rgba(255,250,242,0.92)', backdropFilter: 'blur(6px)' }}
-            >
-              <svg className="size-[16px]" fill="none" viewBox="0 0 20 20">{icon}</svg>
-            </button>
-          ))}
-        </div>
+        {/* ── 하단 패널 (스켈레톤 or 가게 카드) ── */}
+        <div className="absolute bottom-0 left-0 right-0 z-20">
 
-        {/* 가게 수 */}
-        <div
-          className="absolute left-[12px] top-[12px] px-[10px] py-[5px] rounded-[8px]"
-          style={{ backgroundColor: isRamen ? 'rgba(42,23,15,0.9)' : 'rgba(255,250,242,0.9)', backdropFilter: 'blur(6px)' }}
-        >
-          <span className="text-[11px]" style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: subColor }}>
-            {filteredShops.length}개 가게
+          {/* 검색 중 스켈레톤 카드 */}
+          {mapReady && searching && !selectedPlace && (
+            <SearchingSkeletonCard accent={accent} subColor={subColor} mutedColor={mutedColor} chipBg={chipBg} isRamen={isRamen} />
+          )}
+
+          {/* 가게 카드 슬라이드업 */}
+          <div className="transition-transform duration-300 ease-out"
+            style={{ transform: selectedPlace ? 'translateY(0)' : 'translateY(110%)' }}>
+            {selectedPlace && (
+              <BottomPlaceCard
+                place={selectedPlace}
+                onClose={() => { closeOverlay(); setSelectedPlace(null); }}
+                onDirections={handleDirections}
+                theme={theme}
+                isRamen={isRamen}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 검색 중 ���켈레톤 카드 ─────────────────────────────────────────────────
+function SearchingSkeletonCard({
+  accent, subColor, mutedColor, chipBg, isRamen,
+}: { accent: string; subColor: string; mutedColor: string; chipBg: string; isRamen: boolean }) {
+  const shimmer = `${accent}18`;
+
+  return (
+    <div style={{
+      background: 'linear-gradient(to top, rgba(255,251,245,1) 85%, transparent)',
+      paddingTop: '24px',
+    }}>
+      <div className="flex justify-center mb-[10px]">
+        <div className="w-[36px] h-[4px] rounded-full" style={{ backgroundColor: mutedColor + '40' }} />
+      </div>
+
+      <div className="px-[18px] pb-[28px] flex flex-col gap-[14px]">
+        {/* "탐색 중" 레이블 */}
+        <div className="flex items-center gap-[10px]">
+          <Spinner accent={accent} size={15} />
+          <span className="text-[13px]"
+            style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: accent, fontWeight: 600 }}>
+            울산 라멘집 탐색 중...
           </span>
         </div>
 
-        {/* ─── 하단 메뉴 카드 스트립 (선택된 가게 있을 때) ─── */}
-        {selectedShop && filteredIds.has(selectedShop.id) && (
-          <div
-            className="absolute bottom-0 left-0 right-0 flex flex-col gap-[0px] transition-all duration-300"
-            style={{
-              background: isRamen
-                ? 'linear-gradient(to top, rgba(33,15,7,0.98) 70%, transparent)'
-                : 'linear-gradient(to top, rgba(243,237,226,0.98) 70%, transparent)',
-              paddingTop: '32px',
-            }}
-          >
-            {/* 가게명 + 상세 버튼 */}
-            <div className="flex items-center justify-between px-[16px] pb-[8px]">
-              <div className="flex items-center gap-[8px]">
-                <span
-                  className="text-[15px] tracking-[-0.5px]"
-                  style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", fontWeight: 700, color: isRamen ? '#ffdbce' : theme.titleColor }}
-                >
-                  {selectedShop.name}
-                </span>
-                {selectedShop.waiting && (
-                  <span
-                    className="text-[10px] px-[6px] py-[2px] rounded-full"
-                    style={{ color: accent, border: `1px solid ${accent}` }}
-                  >
-                    웨이팅 {selectedShop.waitingTime}
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => navigate(`/shop/${selectedShop.id}`)}
-                className="flex items-center gap-[5px] px-[12px] py-[6px] rounded-[8px] active:scale-[0.96] transition-transform"
-                style={{ backgroundColor: accent }}
-              >
-                <span
-                  className="text-[11px]"
-                  style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", fontWeight: 700, color: labelColor }}
-                >
-                  상세 보기
-                </span>
-                <svg className="size-[10px]" fill="none" viewBox="0 0 12 12">
-                  <path d="M4 2l4 4-4 4" stroke={labelColor} strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
+        {/* 텍스트 스켈레톤 */}
+        <div className="flex flex-col gap-[10px]">
+          <div className="animate-pulse h-[22px] rounded-[8px] w-[55%]"
+            style={{ backgroundColor: shimmer }} />
+          <div className="animate-pulse h-[13px] rounded-[6px] w-[82%]"
+            style={{ backgroundColor: shimmer }} />
+          <div className="animate-pulse h-[13px] rounded-[6px] w-[45%]"
+            style={{ backgroundColor: shimmer }} />
+        </div>
 
-            {/* 메뉴 카드 가로 스크롤 */}
-            <div
-              className="flex gap-[10px] px-[16px] pb-[16px] overflow-x-auto"
-              style={{ scrollbarWidth: 'none' }}
-            >
-              <div
-                className="shrink-0 rounded-[12px] px-[10px] py-[8px] flex flex-col justify-center gap-[4px]"
-                style={{ width: '72px', backgroundColor: chipBg, border: `1px solid ${border}` }}
-              >
-                <div className="flex items-center gap-[3px]">
-                  <svg className="size-[9px]" fill="#FFB5A0" viewBox="0 0 12 12">
-                    <path d="M6 1l1.3 2.8L11 4.3 8.5 6.8l.6 3.2L6 8.5l-3.1 1.5.6-3.2L1 4.3l3.7-.5z" />
-                  </svg>
-                  <span className="text-[11px]" style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, color: accentSoft }}>
-                    {selectedShop.rating}
-                  </span>
-                </div>
-                <span className="text-[9px]" style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: mutedColor }}>
-                  {selectedShop.distance}
-                </span>
-                <span className="text-[9px]" style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: mutedColor }}>
-                  메뉴 {selectedShop.menus.length}종
-                </span>
-              </div>
-
-              {selectedShop.menus.map((menu) => (
-                <MapMenuCard key={menu.id} menu={menu} theme={theme} isRamen={isRamen} />
-              ))}
-            </div>
-          </div>
-        )}
+        {/* 버튼 스켈레톤 */}
+        <div className="flex gap-[8px]">
+          <div className="animate-pulse flex-1 h-[46px] rounded-[12px]"
+            style={{ backgroundColor: shimmer }} />
+          <div className="animate-pulse flex-[2] h-[46px] rounded-[12px]"
+            style={{ backgroundColor: shimmer }} />
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ── 하단 가게 카드 ─────────────────────────────────────────────────────────
+function BottomPlaceCard({ place, onClose, onDirections, theme, isRamen }: {
+  place: KakaoPlace;
+  onClose: () => void;
+  onDirections: (p: KakaoPlace) => void;
+  theme: any;
+  isRamen: boolean;
+}) {
+  const { chipBg, accent, accentSoft, accentGlowStrong, subColor, mutedColor, labelColor, border } = theme;
+  const titleColor = theme.titleColor;
+  const addr = place.road_address_name || place.address_name;
+
+  return (
+    <div style={{
+      background: 'linear-gradient(to top, rgba(255,251,245,1) 85%, transparent)',
+      paddingTop: '24px',
+    }}>
+      <div className="flex justify-center mb-[10px]">
+        <div className="w-[36px] h-[4px] rounded-full" style={{ backgroundColor: mutedColor + '50' }} />
+      </div>
+
+      <div className="px-[18px] pb-[28px] flex flex-col gap-[14px]">
+        {/* 가게 정보 + 닫기 버튼 */}
+        <div className="flex items-start gap-[10px]">
+          <div className="flex flex-col gap-[4px] flex-1 min-w-0">
+            <span className="text-[20px] tracking-[-0.5px] leading-tight"
+              style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", fontWeight: 700, color: titleColor }}>
+              {place.place_name}
+            </span>
+            <span className="text-[12px] leading-relaxed"
+              style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: subColor }}>
+              {addr}
+            </span>
+            {place.phone && (
+              <span className="text-[12px]"
+                style={{ fontFamily: "'Manrope',sans-serif", color: mutedColor }}>
+                📞 {place.phone}
+              </span>
+            )}
+          </div>
+          <button onClick={onClose}
+            className="size-[32px] flex items-center justify-center rounded-full shrink-0 mt-[2px] active:scale-[0.92] transition-transform"
+            style={{ backgroundColor: chipBg }}>
+            <svg className="size-[14px]" fill="none" viewBox="0 0 16 16">
+              <path d="M4 4l8 8M12 4l-8 8" stroke={mutedColor} strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 버튼 행 */}
+        <div className="flex gap-[8px]">
+          <button
+            onClick={() => window.open(place.place_url, '_blank', 'noopener,noreferrer')}
+            className="flex-1 rounded-[12px] py-[13px] flex items-center justify-center gap-[6px] active:scale-[0.97] transition-transform"
+            style={{ backgroundColor: chipBg, border: `1px solid ${border}` }}>
+            <svg className="size-[14px]" fill="none" viewBox="0 0 20 20">
+              <circle cx="10" cy="9" r="6" stroke={accentSoft} strokeWidth="1.8" />
+              <circle cx="10" cy="9" r="2.5" fill={accentSoft} />
+              <path d="M10 15l-3 5h6l-3-5z" fill={accentSoft} />
+            </svg>
+            <span className="text-[13px]"
+              style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", color: accentSoft }}>
+              지도 앱
+            </span>
+          </button>
+
+          <button
+            onClick={() => onDirections(place)}
+            className="flex-[2] rounded-[12px] py-[13px] flex items-center justify-center gap-[6px] active:scale-[0.97] transition-transform"
+            style={{
+              background: `linear-gradient(135deg, ${accentSoft}, ${accent})`,
+              boxShadow: `0 8px 24px ${accentGlowStrong}`,
+            }}>
+            <svg className="size-[16px]" fill="none" viewBox="0 0 20 20">
+              <path d="M10 2L14 8H11V14H9V8H6L10 2ZM3 14H17V16H3V14Z" fill={labelColor} />
+            </svg>
+            <span className="text-[14px]"
+              style={{ fontFamily: "'WenQuanYi Zen Hei',sans-serif", fontWeight: 700, color: labelColor }}>
+              길찾기
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 공통 UI 요소 ──────────────────────────────────────────────────────────
+
+function ChevronLeft({ stroke }: { stroke: string }) {
+  return (
+    <svg width="16" height="16" fill="none" viewBox="0 0 20 20">
+      <path d="M13 4l-6 6 6 6" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Spinner({ accent, size = 20 }: { accent: string; size?: number }) {
+  return (
+    <svg className="animate-spin" width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <circle cx="10" cy="10" r="8" stroke={accent + '28'} strokeWidth="2.5" />
+      <path d="M10 2a8 8 0 018 8" stroke={accent} strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// 점 3개 펄스 애니메이션
+function PulsingDots({ accent }: { accent: string }) {
+  return (
+    <div className="flex gap-[5px] items-center">
+      {[0, 150, 300].map((delay, i) => (
+        <div
+          key={i}
+          className="size-[5px] rounded-full animate-bounce"
+          style={{ backgroundColor: accent, animationDelay: `${delay}ms`, animationDuration: '900ms' }}
+        />
+      ))}
     </div>
   );
 }

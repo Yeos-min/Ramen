@@ -187,7 +187,7 @@ export default function ShopDetailPage() {
               className="text-[28px] tracking-[-0.7px]"
               style={{
                 fontFamily: "'WenQuanYi Zen Hei', sans-serif",
-                color: isRamen ? '#fff' : theme.titleColor,
+                color: theme.titleColor,
               }}
             >
               {shop.name}
@@ -268,7 +268,7 @@ export default function ShopDetailPage() {
             className="text-[15px] leading-relaxed"
             style={{
               fontFamily: "'WenQuanYi Zen Hei', sans-serif",
-              color: isRamen ? '#fff' : theme.titleColor,
+              color: theme.titleColor,
             }}
           >
             {shop.signature}
@@ -300,7 +300,7 @@ export default function ShopDetailPage() {
                 style={{
                   fontFamily: "'WenQuanYi Zen Hei', sans-serif",
                   fontWeight: 600,
-                  color: isRamen ? '#fff' : theme.titleColor,
+                  color: theme.titleColor,
                 }}
               >
                 {item.value}
@@ -374,15 +374,15 @@ export default function ShopDetailPage() {
                 key={tag}
                 className="rounded-[6px] px-[12px] py-[6px]"
                 style={{
-                  backgroundColor: isRamen ? '#1b3d2b' : '#d8ecd0',
-                  border: `1px solid ${isRamen ? '#2a5a3a' : '#b0d4a0'}`,
+                  backgroundColor: '#e8f4e4',
+                  border: `1px solid #b0d4a0`,
                 }}
               >
                 <span
                   className="text-[12px]"
                   style={{
                     fontFamily: "'WenQuanYi Zen Hei', sans-serif",
-                    color: isRamen ? '#81c784' : '#3a6a30',
+                    color: '#3a6a30',
                   }}
                 >
                   [{tag}]

@@ -12,7 +12,7 @@ interface Props {
 
 export function CompareView({ shopName, entries, isOpen, onClose, theme, isRamen }: Props) {
   const { pageBg, cardBg, chipBg, deepBg, accent, accentSoft, subColor, mutedColor, border, labelColor } = theme;
-  const titleColor = isRamen ? '#ffdbce' : theme.titleColor;
+  const titleColor = theme.titleColor;
 
   // 최신 2개 기준
   const [newEntry, oldEntry] = entries.slice(0, 2);
@@ -169,7 +169,7 @@ function CompareRow({
   isDate?: boolean;
 }) {
   const { chipBg, deepBg, accent, accentSoft, subColor, mutedColor, border } = theme;
-  const titleColor = isRamen ? '#ffdbce' : theme.titleColor;
+  const titleColor = theme.titleColor;
 
   return (
     <div className="flex flex-col gap-[6px]">
@@ -192,7 +192,7 @@ function CompareRow({
             className={`text-[13px] ${multiLine ? '' : 'line-clamp-2'}`}
             style={{
               fontFamily: isDate ? "'Manrope', sans-serif" : "'WenQuanYi Zen Hei', sans-serif",
-              color: highlight ? (isRamen ? '#fff' : theme.titleColor) : titleColor,
+              color: highlight ? theme.titleColor : titleColor,
               fontWeight: highlight ? 600 : 400,
               display: 'block',
             }}

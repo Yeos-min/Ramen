@@ -61,7 +61,7 @@ function InlineAddForm({
         value={date}
         onChange={(e) => setDate(e.target.value)}
         className="w-full bg-transparent text-[13px] outline-none rounded-[6px] px-[10px] py-[8px]"
-        style={{ fontFamily: "'Manrope', sans-serif", color: isRamen ? '#ffdbce' : theme.titleColor, border: `1px solid ${border}` }}
+        style={{ fontFamily: "'Manrope', sans-serif", color: theme.titleColor, border: `1px solid ${border}` }}
       />
       {menus && menus.length > 0 && (
         <div className="flex gap-[4px] flex-wrap">
@@ -87,7 +87,7 @@ function InlineAddForm({
         onChange={(e) => setMenu(e.target.value)}
         placeholder="주문한 메뉴"
         className="w-full bg-transparent text-[13px] outline-none rounded-[6px] px-[10px] py-[8px]"
-        style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: isRamen ? '#fff' : theme.titleColor, border: `1px solid ${border}` }}
+        style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: theme.titleColor, border: `1px solid ${border}` }}
       />
       <textarea
         value={memo}
@@ -95,7 +95,7 @@ function InlineAddForm({
         placeholder="한 줄 메모 (선택)"
         rows={2}
         className="w-full bg-transparent text-[13px] outline-none resize-none rounded-[6px] px-[10px] py-[8px]"
-        style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: isRamen ? '#fff' : theme.titleColor, border: `1px solid ${border}` }}
+        style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: theme.titleColor, border: `1px solid ${border}` }}
       />
       <div className="flex gap-[8px]">
         <button
@@ -192,14 +192,14 @@ function EntryCard({
             value={editMenu}
             onChange={(e) => setEditMenu(e.target.value)}
             className="w-full bg-transparent text-[13px] outline-none rounded-[6px] px-[8px] py-[6px]"
-            style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: isRamen ? '#fff' : theme.titleColor, border: `1px solid ${border}` }}
+            style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: theme.titleColor, border: `1px solid ${border}` }}
           />
           <textarea
             value={editMemo}
             onChange={(e) => setEditMemo(e.target.value)}
             rows={2}
             className="w-full bg-transparent text-[12px] outline-none resize-none rounded-[6px] px-[8px] py-[6px]"
-            style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: isRamen ? '#ccc' : subColor, border: `1px solid ${border}` }}
+            style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: subColor, border: `1px solid ${border}` }}
           />
           <div className="flex gap-[6px]">
             <button
@@ -218,7 +218,7 @@ function EntryCard({
         <>
           <div
             className="text-[14px]"
-            style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: isRamen ? '#ffdbce' : theme.titleColor, fontWeight: 600 }}
+            style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: theme.titleColor, fontWeight: 600 }}
           >
             {entry.menu}
           </div>
@@ -245,7 +245,7 @@ export default function NotebookPage() {
 
   const isRamen = mode === 'ramen';
   const { pageBg, cardBg, chipBg, deepBg, accent, accentSoft, subColor, mutedColor, labelColor, border } = theme;
-  const titleColor = isRamen ? '#ffdbce' : theme.titleColor;
+  const titleColor = theme.titleColor;
 
   // 가게별 그룹 집계
   const shopGroups = useMemo<ShopGroup[]>(() => {

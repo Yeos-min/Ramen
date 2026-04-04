@@ -52,7 +52,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<AppMode>('ramen');
 
   const [preference, setPreference] = useState<Preference>({
-    broth: null,
+    broth: [],       // ← 빈 배열로 초기화
     texture: null,
     richness: null,
     spiceLevel: null,
@@ -102,7 +102,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let shops = mockShops.filter((s) => s.type === mode);
     const scored = shops.map((shop) => {
       let score = 0;
-      if (preference.broth && shop.broth === preference.broth) score += 3;
+      // 선택한 육수 중 하나라도 가게 broth 배열에 포함되면 매칭
+      const brothMatch = preference.broth.length > 0 &&
+        preference.broth.some(b => shop.broth.includes(b));
+      if (brothMatch) score += 3;
       if (preference.texture && shop.texture === preference.texture) score += 2;
       if (preference.richness && shop.richness === preference.richness) score += 2;
       if (preference.spiceLevel && shop.spiceLevel === preference.spiceLevel) score += 2;

@@ -45,7 +45,7 @@ export function MatchedMenuCard({ menus, preference, theme, isRamen, mode }: Pro
     });
 
   const { accent, accentSoft, chipBg, deepBg, subColor, mutedColor, border, labelColor, cardBg } = theme;
-  const textMain = isRamen ? '#fff' : theme.titleColor;
+  const textMain = theme.titleColor;
 
   if (total === 0) return null; // 아무것도 선택 안 했으면 표시 안 함
 

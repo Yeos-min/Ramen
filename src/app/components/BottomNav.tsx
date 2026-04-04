@@ -2,23 +2,49 @@ import { useNavigate, useLocation } from 'react-router';
 import { useApp } from '../AppContext';
 
 export function BottomNav() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { theme } = useApp();
-  const path = location.pathname;
+  const navigate   = useNavigate();
+  const location   = useLocation();
+  const { theme }  = useApp();
+  const path       = location.pathname;
 
-  const isHome = path === '/' || path === '/results';
-  const isMap = path === '/map';
+  const isHome     = path === '/' || path === '/results' || path === '/events';
+  const isMap      = path === '/map';
   const isNotebook = path === '/notebook';
 
-  const navItems = [
+  // 순서: 지도 / 홈(중앙·강조) / 수첩
+  type NavItem = {
+    key: string;
+    label: string;
+    active: boolean;
+    isCenter?: boolean;
+    onClick: () => void;
+    icon: (active: boolean, isCenter: boolean) => JSX.Element;
+  };
+
+  const navItems: NavItem[] = [
+    {
+      key: 'map',
+      label: '지도',
+      active: isMap,
+      onClick: () => navigate('/map'),
+      icon: (active) => (
+        <svg className="size-[20px]" fill="none" viewBox="0 0 20 20">
+          <path
+            d="M10 2a6 6 0 016 6c0 4.5-6 10-6 10S4 12.5 4 8a6 6 0 016-6z"
+            fill={active ? theme.labelColor : theme.mutedColor}
+          />
+          <circle cx="10" cy="8" r="2" fill={active ? theme.pageBg : theme.pageBg} />
+        </svg>
+      ),
+    },
     {
       key: 'home',
       label: '홈',
       active: isHome,
+      isCenter: true,
       onClick: () => navigate('/'),
-      icon: (active: boolean) => (
-        <svg className="size-[20px]" fill="none" viewBox="0 0 20 20">
+      icon: (active, isCenter) => (
+        <svg className={isCenter ? 'size-[26px]' : 'size-[20px]'} fill="none" viewBox="0 0 20 20">
           <path
             d="M3 10.5L10 3l7 7.5M5.5 8v9a1.5 1.5 0 001.5 1.5h3V13h4v5.5h3a1.5 1.5 0 001.5-1.5V8"
             stroke={active ? theme.labelColor : theme.mutedColor}
@@ -31,26 +57,11 @@ export function BottomNav() {
       ),
     },
     {
-      key: 'map',
-      label: '지도',
-      active: isMap,
-      onClick: () => navigate('/map'),
-      icon: (active: boolean) => (
-        <svg className="size-[20px]" fill="none" viewBox="0 0 20 20">
-          <path
-            d="M10 2a6 6 0 016 6c0 4.5-6 10-6 10S4 12.5 4 8a6 6 0 016-6z"
-            fill={active ? theme.labelColor : theme.mutedColor}
-          />
-          <circle cx="10" cy="8" r="2" fill={active ? theme.pageBg : theme.pageBg} />
-        </svg>
-      ),
-    },
-    {
       key: 'notebook',
       label: '수첩',
       active: isNotebook,
       onClick: () => navigate('/notebook'),
-      icon: (active: boolean) => (
+      icon: (active) => (
         <svg className="size-[20px]" fill="none" viewBox="0 0 18 20">
           <rect
             x="2" y="2" width="14" height="16" rx="2"
@@ -75,35 +86,42 @@ export function BottomNav() {
       style={{
         backgroundColor: theme.navBg,
         borderTop: `1px solid ${theme.border}`,
-        boxShadow: `0px -8px 24px 0px ${theme.shadow}`,
+        boxShadow: `0px -4px 20px 0px ${theme.shadow}`,
       }}
     >
-      {navItems.map((item) => (
-        <button
-          key={item.key}
-          onClick={item.onClick}
-          className="flex flex-col items-center gap-[4px] px-5 py-2 rounded-xl transition-all duration-200"
-          style={
-            item.active
-              ? {
-                  backgroundColor: theme.accent,
-                  boxShadow: `0px 0px 14px 0px ${theme.accentGlow}`,
-                }
-              : { opacity: 0.5 }
-          }
-        >
-          {item.icon(item.active)}
-          <span
-            className="text-[10px] tracking-wide"
-            style={{
-              fontFamily: "'WenQuanYi Zen Hei', sans-serif",
-              color: item.active ? theme.labelColor : theme.mutedColor,
-            }}
+      {navItems.map((item) => {
+        const isCenter = !!item.isCenter;
+        return (
+          <button
+            key={item.key}
+            onClick={item.onClick}
+            className="flex flex-col items-center gap-[4px] px-5 py-2 rounded-xl transition-all duration-200 active:scale-[0.92]"
+            style={
+              item.active
+                ? {
+                    backgroundColor: theme.accent,
+                    boxShadow: `0px 0px ${isCenter ? '20px' : '14px'} 0px ${theme.accentGlow}`,
+                    // 홈 버튼은 조금 더 크게
+                    padding: isCenter ? '10px 20px' : undefined,
+                  }
+                : { opacity: 0.55 }
+            }
           >
-            {item.label}
-          </span>
-        </button>
-      ))}
+            {item.icon(item.active, isCenter)}
+            <span
+              className="tracking-wide"
+              style={{
+                fontFamily: "'WenQuanYi Zen Hei', sans-serif",
+                fontSize: isCenter ? '11px' : '10px',
+                fontWeight: isCenter ? 700 : 400,
+                color: item.active ? theme.labelColor : theme.mutedColor,
+              }}
+            >
+              {item.label}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

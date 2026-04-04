@@ -5,6 +5,7 @@ import ResultsPage from "./pages/ResultsPage";
 import ShopDetailPage from "./pages/ShopDetailPage";
 import MapPage from "./pages/MapPage";
 import NotebookPage from "./pages/NotebookPage";
+import EventsPage from "./pages/EventsPage";
 
 export const router = createBrowserRouter([
   {
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
       { path: "shop/:id", Component: ShopDetailPage },
       { path: "map", Component: MapPage },
       { path: "notebook", Component: NotebookPage },
+      { path: "events", Component: EventsPage },
     ],
   },
 ]);

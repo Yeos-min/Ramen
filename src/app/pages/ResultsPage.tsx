@@ -63,7 +63,7 @@ export default function ResultsPage() {
             style={{
               fontFamily: "'WenQuanYi Zen Hei', sans-serif",
               lineHeight: '1.2',
-              color: isRamen ? '#ffdbce' : titleColor,
+              color: titleColor,
             }}
           >
             <p className="mb-0">당신을 위한</p>
@@ -147,7 +147,7 @@ export default function ResultsPage() {
                   <div>
                     <div
                       className="text-[20px] tracking-[-0.5px]"
-                      style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: isRamen ? '#fff' : titleColor }}
+                      style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: titleColor }}
                     >
                       {shop.name}
                     </div>
@@ -169,7 +169,7 @@ export default function ResultsPage() {
                 {/* Spec chips */}
                 <div className="flex gap-[6px] flex-wrap">
                   {[
-                    { label: shop.broth + ' 육수' },
+                    { label: shop.broth.join('·') + ' 육수' },
                     { label: shop.texture + '면' },
                     { label: shop.richness },
                     ...(shop.spiceLevel !== '없음' ? [{ label: '매운맛 ' + shop.spiceLevel }] : []),
@@ -242,7 +242,7 @@ export default function ResultsPage() {
                     className="text-[12px] leading-relaxed"
                     style={{
                       fontFamily: "'WenQuanYi Zen Hei', sans-serif",
-                      color: isRamen ? '#ffdbce' : titleColor,
+                      color: titleColor,
                     }}
                   >
                     {shop.signature}

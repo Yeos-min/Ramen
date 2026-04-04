@@ -6,7 +6,7 @@ export type SignatureTag = '수제면 제조' | '직접 우린 육수' | '기간
 export type ShopType = 'ramen' | 'udon';
 
 export interface Preference {
-  broth: BrothType | null;
+  broth: BrothType[];           // ← 배열로 변경 (복수 선택)
   texture: TextureType | null;
   richness: RichnessType | null;
   spiceLevel: SpiceType | null;
@@ -33,7 +33,7 @@ export interface Shop {
   distance: string;
   imageUrl: string;
   tags: string[];
-  broth: BrothType;
+  broth: BrothType[];          // ← 배열로 변경
   texture: TextureType;
   richness: RichnessType;
   spiceLevel: SpiceType;
@@ -51,7 +51,7 @@ export interface Shop {
 
 export interface NotebookEntry {
   id: string;
-  shopId?: string; // 연결된 가게 ID
+  shopId?: string;
   date: string;
   shopName: string;
   menu: string;
@@ -63,7 +63,7 @@ export function getMenuMatch(
   pref: Preference
 ): { score: number; matchedLabels: string[] } {
   const matchedLabels: string[] = [];
-  if (pref.broth && menu.broth === pref.broth) matchedLabels.push(pref.broth + ' 계열');
+  if (pref.broth.length > 0 && pref.broth.includes(menu.broth)) matchedLabels.push(pref.broth.join('·') + ' 계열');
   if (pref.texture && menu.texture === pref.texture) matchedLabels.push(pref.texture + '면');
   if (pref.richness && menu.richness === pref.richness) matchedLabels.push('국물 ' + pref.richness);
   if (pref.spiceLevel && menu.spiceLevel === pref.spiceLevel) matchedLabels.push('맵기 ' + pref.spiceLevel);
@@ -71,7 +71,10 @@ export function getMenuMatch(
 }
 
 export function totalSelectedCount(pref: Preference): number {
-  return [pref.broth, pref.texture, pref.richness, pref.spiceLevel].filter(Boolean).length;
+  return [
+    pref.broth.length > 0 ? 1 : null,
+    pref.texture, pref.richness, pref.spiceLevel,
+  ].filter(Boolean).length;
 }
 
 export const mockShops: Shop[] = [
@@ -79,12 +82,12 @@ export const mockShops: Shop[] = [
   {
     id: '1',
     name: '나루라멘',
-    description: '돼지 육수 · 꼬들면 · 진함',
+    description: '돼지·시오 육수 · 꼬들면 · 진함',
     rating: 4.9,
     distance: '1.2km',
     imageUrl: 'https://images.unsplash.com/photo-1557872943-16a5ac26437e?w=400&h=300&fit=crop',
     tags: ['돼지육수', '진국', '차슈'],
-    broth: '돼지',
+    broth: ['돼지', '시오'],
     texture: '꼬들',
     richness: '진함',
     spiceLevel: '약간',
@@ -111,7 +114,7 @@ export const mockShops: Shop[] = [
     distance: '1.5km',
     imageUrl: 'https://images.unsplash.com/photo-1617093727343-374698b1b08d?w=400&h=300&fit=crop',
     tags: ['돼지육수', '진국', '혼밥'],
-    broth: '돼지',
+    broth: ['돼지'],
     texture: '꼬들',
     richness: '진함',
     spiceLevel: '약간',
@@ -135,12 +138,12 @@ export const mockShops: Shop[] = [
   {
     id: '2',
     name: '면족 산',
-    description: '닭 육수 · 꼬들면 · 보통',
+    description: '닭·쇼유 육수 · 꼬들면 · 보통',
     rating: 4.6,
     distance: '2.2km',
     imageUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&h=300&fit=crop',
     tags: ['닭육수', '담백', '수제면'],
-    broth: '닭',
+    broth: ['닭', '쇼유'],
     texture: '꼬들',
     richness: '보통',
     spiceLevel: '없음',
@@ -168,7 +171,7 @@ export const mockShops: Shop[] = [
     distance: '0.8km',
     imageUrl: 'https://images.unsplash.com/photo-1623341214825-9f4f963727da?w=400&h=300&fit=crop',
     tags: ['해물육수', '얼큰', '탄탄면'],
-    broth: '해물',
+    broth: ['해물'],
     texture: '보통',
     richness: '보통',
     spiceLevel: '강함',
@@ -192,12 +195,12 @@ export const mockShops: Shop[] = [
   {
     id: '7',
     name: '간장옥 이노우에',
-    description: '쇼유 · 꼬들면 · 보통',
+    description: '쇼유 육수 · 꼬들면 · 보통',
     rating: 4.7,
     distance: '1.0km',
     imageUrl: 'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400&h=300&fit=crop',
     tags: ['쇼유', '간장', '깔끔'],
-    broth: '쇼유',
+    broth: ['쇼유'],
     texture: '꼬들',
     richness: '보통',
     spiceLevel: '없음',
@@ -220,12 +223,12 @@ export const mockShops: Shop[] = [
   {
     id: '8',
     name: '시오야',
-    description: '시오 · 보통면 · 맑음',
+    description: '시오·닭 육수 · 보통면 · 맑음',
     rating: 4.5,
     distance: '0.6km',
     imageUrl: 'https://images.unsplash.com/photo-1591814468924-caf88d1232e1?w=400&h=300&fit=crop',
     tags: ['시오', '소금', '맑음'],
-    broth: '시오',
+    broth: ['시오', '닭'],
     texture: '보통',
     richness: '맑음',
     spiceLevel: '없음',
@@ -248,12 +251,12 @@ export const mockShops: Shop[] = [
   {
     id: '9',
     name: '삿포로 미소하우스',
-    description: '미소 · 보통면 · 진함',
+    description: '미소·돼지 육수 · 보통면 · 진함',
     rating: 4.6,
     distance: '1.8km',
     imageUrl: 'https://images.unsplash.com/photo-1574484284002-952d92456975?w=400&h=300&fit=crop',
     tags: ['미소', '된장', '진국'],
-    broth: '미소',
+    broth: ['미소', '돼지'],
     texture: '보통',
     richness: '진함',
     spiceLevel: '없음',
@@ -282,7 +285,7 @@ export const mockShops: Shop[] = [
     distance: '1.8km',
     imageUrl: 'https://images.unsplash.com/photo-1599974579688-8dbdd335c77f?w=400&h=300&fit=crop',
     tags: ['닭육수', '맑은국물', '수제면'],
-    broth: '닭',
+    broth: ['닭'],
     texture: '보통',
     richness: '맑음',
     spiceLevel: '없음',
@@ -308,7 +311,7 @@ export const mockShops: Shop[] = [
     distance: '0.9km',
     imageUrl: 'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?w=400&h=300&fit=crop',
     tags: ['해물육수', '걸쭉', '한정메뉴'],
-    broth: '해물',
+    broth: ['해물'],
     texture: '퍼짐',
     richness: '진함',
     spiceLevel: '없음',

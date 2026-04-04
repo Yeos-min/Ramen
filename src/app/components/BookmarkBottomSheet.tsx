@@ -81,7 +81,7 @@ export function BookmarkBottomSheet({ shop, isOpen, onClose, onSave, theme, isRa
           <div className="flex flex-col gap-[2px]">
             <span
               className="text-[18px] tracking-[-0.5px]"
-              style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", fontWeight: 700, color: isRamen ? '#ffdbce' : theme.titleColor }}
+              style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", fontWeight: 700, color: theme.titleColor }}
             >
               📓 탐정수첩 기록
             </span>
@@ -116,7 +116,7 @@ export function BookmarkBottomSheet({ shop, isOpen, onClose, onSave, theme, isRa
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full bg-transparent text-[14px] outline-none"
-                style={{ fontFamily: "'Manrope', sans-serif", color: isRamen ? '#ffdbce' : theme.titleColor }}
+                style={{ fontFamily: "'Manrope', sans-serif", color: theme.titleColor }}
               />
             </div>
           </div>
@@ -170,7 +170,7 @@ export function BookmarkBottomSheet({ shop, isOpen, onClose, onSave, theme, isRa
                 placeholder="오늘의 솔직한 한 마디..."
                 rows={2}
                 className="w-full bg-transparent text-[14px] outline-none resize-none"
-                style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: isRamen ? '#fff' : theme.titleColor }}
+                style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: theme.titleColor }}
               />
             </div>
           </div>
