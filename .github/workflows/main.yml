@@ -24,17 +24,6 @@ jobs:
         env:
           NODE_OPTIONS: --max_old_space_size=4096
 
-      - name: Inject Kakao script
-        run: |
-          node -e "
-          const fs = require('fs');
-          let html = fs.readFileSync('dist/index.html', 'utf8');
-          const kakao = '<script type=\"text/javascript\" src=\"https://dapi.kakao.com/v2/maps/sdk.js?appkey=8d3328b4142c5552c1daa5eec04243f9&libraries=services\"><\/script>';
-          html = html.replace('</head>', kakao + '</head>');
-          fs.writeFileSync('dist/index.html', html);
-          console.log('Done:', html.includes('dapi.kakao.com'));
-          "
-
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
