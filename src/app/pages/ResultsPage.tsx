@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../AppContext';
+import { useKakaoLoader } from 'react-kakao-maps-sdk';
 
-const KAKAO_APP_KEY = '8d3328b4142c5552c1daa5eec04243f9';
 const CHAIN_BLACKLIST = ['이치란', '잇푸도', '키스케'];
-
-declare global { interface Window { kakao: any; } }
 
 interface KakaoPlace {
   id: string;
@@ -19,7 +17,6 @@ interface KakaoPlace {
   category_name: string;
 }
 
-// 취향 → 검색 키워드 매핑
 function buildKeyword(preference: any): string {
   const keywords: string[] = ['울산 라멘'];
   if (preference.broth?.length > 0) {
@@ -42,48 +39,44 @@ export default function ResultsPage() {
     titleColor, subColor, mutedColor, labelColor, border, deepBg,
   } = theme;
 
+  const [kakaoLoading] = useKakaoLoader({
+    appkey: '8d3328b4142c5552c1daa5eec04243f9',
+    libraries: ['services'],
+  });
+
   const [places, setPlaces] = useState<KakaoPlace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const search = () => {
-      if (!window.kakao?.maps?.services) return;
-      setLoading(true);
-      setError(false);
-      const keyword = buildKeyword(preference);
-      const ps = new window.kakao.maps.services.Places();
-      ps.keywordSearch(
-        keyword,
-        (data: KakaoPlace[], status: string) => {
-          setLoading(false);
-          if (status === window.kakao.maps.services.Status.OK) {
-            const result = data.filter(
-              p => !CHAIN_BLACKLIST.some(c => p.place_name.includes(c))
-            );
-            setPlaces(result.slice(0, 10));
-          } else {
-            setError(true);
-          }
-        },
-        {
-          location: new window.kakao.maps.LatLng(35.5384, 129.3114),
-          radius: 15000,
-          sort: window.kakao.maps.services.SortBy.ACCURACY,
-          size: 10,
-        }
-      );
-    };
+    if (kakaoLoading) return;
 
-    if (window.kakao?.maps) {
-      search();
-    } else {
-      const poll = setInterval(() => {
-        if (window.kakao?.maps) { clearInterval(poll); search(); }
-      }, 100);
-      return () => clearInterval(poll);
-    }
-  }, []);
+    setLoading(true);
+    setError(false);
+
+    const keyword = buildKeyword(preference);
+    const ps = new kakao.maps.services.Places();
+    ps.keywordSearch(
+      keyword,
+      (data: any[], status: string) => {
+        setLoading(false);
+        if (status === kakao.maps.services.Status.OK) {
+          const result = data.filter(
+            p => !CHAIN_BLACKLIST.some(c => p.place_name.includes(c))
+          );
+          setPlaces(result.slice(0, 10) as KakaoPlace[]);
+        } else {
+          setError(true);
+        }
+      },
+      {
+        location: new kakao.maps.LatLng(35.5384, 129.3114),
+        radius: 15000,
+        sort: kakao.maps.services.SortBy.ACCURACY,
+        size: 10,
+      }
+    );
+  }, [kakaoLoading]);
 
   return (
     <div className="w-full pb-[32px] transition-colors duration-500" style={{ backgroundColor: pageBg }}>
@@ -126,69 +119,57 @@ export default function ResultsPage() {
         </div>
 
         {/* 로딩 */}
-        {loading && (
+        {(loading || kakaoLoading) && (
           <div className="flex flex-col gap-[12px]">
-            {[1,2,3].map(i => (
-              <div key={i} className="rounded-[14px] overflow-hidden animate-pulse h-[100px]"
+            {[1, 2, 3].map(i => (
+              <div key={i} className="rounded-[14px] overflow-hidden animate-pulse h-[88px]"
                 style={{ backgroundColor: cardBg }} />
             ))}
           </div>
         )}
 
         {/* 에러 */}
-        {error && !loading && (
+        {error && !loading && !kakaoLoading && (
           <div className="flex flex-col items-center gap-[12px] py-[40px]">
             <span className="text-[36px]">🔍</span>
             <span className="text-[14px]"
               style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: subColor }}>
               검색 결과를 불러오지 못했습니다
             </span>
-            <button onClick={() => window.location.reload()}
-              className="px-[20px] py-[10px] rounded-[10px]"
-              style={{ backgroundColor: accent, color: labelColor,
-                fontFamily: "'WenQuanYi Zen Hei', sans-serif", fontSize: '13px' }}>
-              다시 시도
-            </button>
           </div>
         )}
 
-        {/* 가게 카드 목록 — 가로형 */}
-        {!loading && !error && (
-          <div className="flex flex-col">
+        {/* 가게 카드 목록 */}
+        {!loading && !kakaoLoading && !error && (
+          <div className="flex flex-col" style={{ backgroundColor: cardBg, borderRadius: '14px', overflow: 'hidden' }}>
             {places.map((place, idx) => (
               <button
                 key={place.id}
                 onClick={() => window.open(place.place_url, '_blank', 'noopener,noreferrer')}
-                className="flex gap-[14px] items-center py-[16px] text-left active:scale-[0.98] transition-transform"
+                className="flex gap-[14px] items-center px-[16px] py-[14px] text-left active:scale-[0.98] transition-transform"
                 style={{ borderBottom: idx < places.length - 1 ? `1px solid ${border}` : 'none' }}
               >
-                {/* 번호 뱃지 */}
-                <div className="shrink-0 size-[20px] rounded-full flex items-center justify-center"
+                {/* 번호 */}
+                <div className="shrink-0 size-[22px] rounded-full flex items-center justify-center"
                   style={{ backgroundColor: accent }}>
-                  <span className="text-[10px]"
+                  <span className="text-[11px]"
                     style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, color: labelColor }}>
                     {idx + 1}
                   </span>
                 </div>
 
-                {/* 가게 이미지 */}
-                <div className="shrink-0 size-[72px] rounded-[10px] overflow-hidden"
-                  style={{ backgroundColor: chipBg }}>
-                  <div className="w-full h-full flex items-center justify-center"
-                    style={{ backgroundColor: `${accent}18` }}>
-                    <span style={{ fontSize: '28px' }}>🍜</span>
-                  </div>
+                {/* 이미지 자리 */}
+                <div className="shrink-0 size-[64px] rounded-[10px] flex items-center justify-center"
+                  style={{ backgroundColor: `${accent}18` }}>
+                  <span style={{ fontSize: '26px' }}>🍜</span>
                 </div>
 
-                {/* 가게 정보 */}
-                <div className="flex-1 min-w-0 flex flex-col gap-[4px]">
-                  <div className="flex items-start justify-between gap-[8px]">
-                    <span className="text-[16px] tracking-[-0.3px] truncate"
-                      style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif",
-                        fontWeight: 700, color: titleColor }}>
-                      {place.place_name}
-                    </span>
-                  </div>
+                {/* 정보 */}
+                <div className="flex-1 min-w-0 flex flex-col gap-[3px]">
+                  <span className="text-[15px] tracking-[-0.3px] truncate"
+                    style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", fontWeight: 700, color: titleColor }}>
+                    {place.place_name}
+                  </span>
                   <span className="text-[11px] truncate"
                     style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: mutedColor }}>
                     {place.road_address_name || place.address_name}
@@ -199,8 +180,8 @@ export default function ResultsPage() {
                       📞 {place.phone}
                     </span>
                   )}
-                  <div className="flex gap-[5px] mt-[2px] flex-wrap">
-                    <div className="px-[7px] py-[2px] rounded-[4px]"
+                  <div className="flex gap-[4px] mt-[2px]">
+                    <div className="px-[6px] py-[1px] rounded-[4px]"
                       style={{ backgroundColor: `${accent}18` }}>
                       <span className="text-[10px]"
                         style={{ fontFamily: "'WenQuanYi Zen Hei', sans-serif", color: accent }}>
@@ -211,12 +192,10 @@ export default function ResultsPage() {
                 </div>
 
                 {/* 화살표 */}
-                <div className="shrink-0">
-                  <svg className="size-[16px]" fill="none" viewBox="0 0 16 16">
-                    <path d="M6 12l4-4-4-4" stroke={mutedColor} strokeWidth="2"
-                      strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
+                <svg className="size-[16px] shrink-0" fill="none" viewBox="0 0 16 16">
+                  <path d="M6 12l4-4-4-4" stroke={mutedColor} strokeWidth="2"
+                    strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
             ))}
           </div>
