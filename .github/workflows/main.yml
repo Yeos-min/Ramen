@@ -19,10 +19,18 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Clean Vite cache
+        run: rm -rf node_modules/.vite
+
       - name: Build
         run: npm run build
         env:
           NODE_OPTIONS: --max_old_space_size=4096
+
+      - name: Verify kakao in dist
+        run: |
+          grep -c "dapi.kakao.com" dist/index.html && echo "OK" || echo "MISSING"
+          grep -c "autoload=false" dist/index.html && echo "WARN: autoload=false found" || echo "OK: no autoload=false"
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
