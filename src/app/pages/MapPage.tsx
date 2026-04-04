@@ -92,26 +92,54 @@ export default function MapPage() {
     }
   }, []);
 
-  // ── ① 카카오 SDK 주입 + 100ms 폴링으로 감지 → 지도 초기화 ─────────────
-  useEffect(() => {
-    // 지도 초기화 (window.kakao.maps 준비 완료 후 호출)
-    const initMap = () => {
-      const container = document.getElementById('kakao-map');
-      if (!container || mapRef.current) return;
+  // ── ① 카카오 SDK 주입 및 안전한 초기화 (autoload=false 적용) ─────────────
+  useEffect(() => {
+    const initMap = () => {
+      const container = document.getElementById('kakao-map');
+      if (!container || mapRef.current) return;
 
-      mapRef.current = new window.kakao.maps.Map(container, {
-        center: new window.kakao.maps.LatLng(35.5384, 129.3114),
-        level: 5,
-      });
+      mapRef.current = new window.kakao.maps.Map(container, {
+        center: new window.kakao.maps.LatLng(35.5384, 129.3114),
+        level: 5,
+      });
 
-      // 지도 빈 영역 클릭 → 말풍선 + 하단 카드 닫기
-      window.kakao.maps.event.addListener(mapRef.current, 'click', () => {
-        closeOverlay();
-        setSelectedPlace(null);
-      });
+      window.kakao.maps.event.addListener(mapRef.current, 'click', () => {
+        closeOverlay();
+        setSelectedPlace(null);
+      });
 
-      setMapReady(true);
-    };
+      setMapReady(true);
+    };
+
+    // 1. 스크립트가 이미 준비된 경우 즉시 로드
+    if (window.kakao && window.kakao.maps) {
+      window.kakao.maps.load(initMap);
+      return;
+    }
+
+    // 2. 스크립트가 없는 경우 새로 주입
+    const scriptId = 'kakao-map-script';
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.type = 'text/javascript';
+      // 핵심: 맨 끝에 &autoload=false 를 붙여서 자동 실행을 막습니다.
+      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&libraries=services&autoload=false`;
+      
+      script.onload = () => {
+        // 스크립트 다운로드가 완벽히 끝나면 우리가 직접 지도를 깨웁니다.
+        window.kakao.maps.load(initMap);
+      };
+      
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      markersRef.current.forEach(m => m.setMap(null));
+      markersRef.current = [];
+      closeOverlay();
+    };
+  }, [closeOverlay]);
 
     // 이미 로드된 경우 즉시 초기화
     if (window.kakao?.maps) {
