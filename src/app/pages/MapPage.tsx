@@ -108,24 +108,18 @@ export default function MapPage() {
       setMapReady(true);
     };
 
-    if (window.kakao && window.kakao.maps) {
-      window.kakao.maps.load(initMap);
-      return;
-    }
+    if (window.kakao?.maps) {
+  initMap();
+  return;
+}
 
-    const scriptId = 'kakao-map-script';
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.type = 'text/javascript';
-      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&libraries=services&autoload=false`;
-      
-      script.onload = () => {
-        window.kakao.maps.load(initMap);
-      };
-      
-      document.head.appendChild(script);
-    }
+const poll = setInterval(() => {
+  if (window.kakao?.maps) {
+    clearInterval(poll);
+    initMap();
+  }
+}, 100);
+return () => clearInterval(poll);
 
     return () => {
       markersRef.current.forEach(m => m.setMap(null));
