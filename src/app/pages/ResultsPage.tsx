@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../AppContext';
-import { useKakaoLoader } from 'react-kakao-maps-sdk';
 
 const CHAIN_BLACKLIST = ['이치란', '잇푸도', '키스케'];
 
@@ -39,47 +38,52 @@ export default function ResultsPage() {
     titleColor, subColor, mutedColor, labelColor, border, deepBg,
   } = theme;
 
-  const [kakaoLoading] = useKakaoLoader({
-    appkey: '8d3328b4142c5552c1daa5eec04243f9',
-    libraries: ['services'],
-  });
-
   const [places, setPlaces] = useState<KakaoPlace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (kakaoLoading) return;
-
-    setLoading(true);
-    setError(false);
-
-    const keyword = buildKeyword(preference);
-    const ps = new kakao.maps.services.Places();
-    ps.keywordSearch(
-      keyword,
-      (data: any[], status: string) => {
-        setLoading(false);
-        if (status === kakao.maps.services.Status.OK) {
-          const result = data.filter(
-            p => !CHAIN_BLACKLIST.some(c => p.place_name.includes(c))
-          );
-          setPlaces(result.slice(0, 10) as KakaoPlace[]);
-        } else {
-          setError(true);
-        }
-      },
-      {
-        location: new kakao.maps.LatLng(35.5384, 129.3114),
-        radius: 15000,
-        sort: kakao.maps.services.SortBy.ACCURACY,
-        size: 10,
+    // window.kakao.maps 가 준비되었는지 확인
+    const checkAndSearch = () => {
+      if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) {
+        // 아직 로딩 안 됐으면 1초 뒤에 다시 시도 (가벼운 재귀 폴링)
+        setTimeout(checkAndSearch, 1000);
+        return;
       }
-    );
-  }, [kakaoLoading]);
+
+      setLoading(true);
+      setError(false);
+
+      const keyword = buildKeyword(preference);
+      const ps = new window.kakao.maps.services.Places();
+      
+      ps.keywordSearch(
+        keyword,
+        (data: any[], status: string) => {
+          setLoading(false);
+          if (status === window.kakao.maps.services.Status.OK) {
+            const result = data.filter(
+              p => !CHAIN_BLACKLIST.some(c => p.place_name.includes(c))
+            );
+            setPlaces(result.slice(0, 10) as KakaoPlace[]);
+          } else {
+            setError(true);
+          }
+        },
+        {
+          location: new window.kakao.maps.LatLng(35.5384, 129.3114),
+          radius: 15000,
+          sort: window.kakao.maps.services.SortBy.ACCURACY,
+          size: 10,
+        }
+      );
+    };
+
+    checkAndSearch();
+  }, [preference]);
 
   return (
-    <div className="w-full pb-[32px] transition-colors duration-500" style={{ backgroundColor: pageBg }}>
+    <div className="w-full pb-[32px] transition-colors duration-500" style={{ backgroundColor: pageBg, minHeight: '100vh' }}>
       {/* 헤더 */}
       <div className="sticky top-0 z-10 px-[20px] py-[14px] flex items-center gap-[14px] transition-colors duration-500"
         style={{ backgroundColor: pageBg }}>
@@ -119,7 +123,7 @@ export default function ResultsPage() {
         </div>
 
         {/* 로딩 */}
-        {(loading || kakaoLoading) && (
+        {loading && (
           <div className="flex flex-col gap-[12px]">
             {[1, 2, 3].map(i => (
               <div key={i} className="rounded-[14px] overflow-hidden animate-pulse h-[88px]"
@@ -129,7 +133,7 @@ export default function ResultsPage() {
         )}
 
         {/* 에러 */}
-        {error && !loading && !kakaoLoading && (
+        {error && !loading && (
           <div className="flex flex-col items-center gap-[12px] py-[40px]">
             <span className="text-[36px]">🔍</span>
             <span className="text-[14px]"
@@ -140,7 +144,7 @@ export default function ResultsPage() {
         )}
 
         {/* 가게 카드 목록 */}
-        {!loading && !kakaoLoading && !error && (
+        {!loading && !error && (
           <div className="flex flex-col" style={{ backgroundColor: cardBg, borderRadius: '14px', overflow: 'hidden' }}>
             {places.map((place, idx) => (
               <button
