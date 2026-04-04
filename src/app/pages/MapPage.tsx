@@ -124,7 +124,7 @@ export default function MapPage() {
       const script = document.createElement('script');
       script.type  = 'text/javascript';
       // autoload=true (기본값): 스크립트 로드되면 window.kakao.maps 자동으로 준비됨
-      script.src   = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&libraries=services`;
+      script.src   = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&libraries=services`;
       document.head.appendChild(script);
     }
 
