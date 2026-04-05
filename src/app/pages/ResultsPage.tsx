@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../AppContext';
+declare global {
+  interface Window { kakao: any; }
+}
 
 const CHAIN_BLACKLIST = ['이치란', '잇푸도', '키스케'];
 
